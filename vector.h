@@ -7,6 +7,8 @@
 #include <limits>
 #include <memory>
 
+namespace iterator {
+
 template<typename T>
 class Iterator : std::iterator<std::random_access_iterator_tag, T> {
  public:
@@ -110,6 +112,9 @@ class Iterator : std::iterator<std::random_access_iterator_tag, T> {
   pointer ptr_;
 };
 
+}
+
+
 template<class T, class A = std::allocator<T>>
 class Vector {
  public:
@@ -121,7 +126,7 @@ class Vector {
   typedef typename A::difference_type difference_type;
   typedef typename A::pointer pointer;
   typedef typename A::const_pointer const_pointer;
-  typedef typename Iterator<T> iterator;
+  typedef typename iterator::Iterator<T> iterator;
   typedef typename ConstIterator<T> const_iterator;
   typedef std::reverse_iterator<iterator> reverse_iterator;
   typedef std::reverse_iterator<const_iterator> const_reverse_iterator;
@@ -204,9 +209,8 @@ class Vector {
   }
 
   void resize(size_type a_size){
-    if (real_size_ < a_size){
+    if (real_size_ < a_size)
       reserve(a_size);
-    }
     size_ = a_size;
   }
 
@@ -245,21 +249,36 @@ class Vector {
   }
 
   template<class... Args>
-  iterator emplace(iterator a_position, Args &&... args);
+  iterator emplace(iterator a_position, Args &&... args){
+
+  }
 
   template<class... Args>
-  iterator emplace_back(Args &&... args);
+  iterator emplace_back(Args &&... args){
+    resize(size_ + 1);
+    data_[size_ - 1] = T(std::forward(args)...);
+  }
 
-  void push_back(const T &a_value);
+  void push_back(const T &a_value){
+    resize(size_ + 1);
+    data_[size_ - 1] = std::forward(a_value);
+  }
 
   // [first, last}
   iterator erase(iterator a_first, iterator a_last);
 
   iterator erase(iterator a_position);
 
-  void clear();
+  void clear(){
+    alloc_.deallocate(data_, real_size_);
+    size_ = 0;
+    real_size_ = 0;
+  }
 
-  void pop_back();
+  void pop_back(){
+    data_[size_ - 1] = nullptr;
+    resize(size_ - 1);
+  }
 
  private:
   size_type size_;
