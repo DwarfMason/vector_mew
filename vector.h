@@ -114,7 +114,6 @@ class Iterator : std::iterator<std::random_access_iterator_tag, T> {
 
 }
 
-
 template<class T, class A = std::allocator<T>>
 class Vector {
  public:
@@ -127,75 +126,102 @@ class Vector {
   typedef typename A::pointer pointer;
   typedef typename A::const_pointer const_pointer;
   typedef typename iterator::Iterator<T> iterator;
-  typedef typename ConstIterator<T> const_iterator;
+ // typedef typename ConstIterator<T> const_iterator;
   typedef std::reverse_iterator<iterator> reverse_iterator;
-  typedef std::reverse_iterator<const_iterator> const_reverse_iterator;
+ // typedef std::reverse_iterator<const_iterator> const_reverse_iterator;
 
 
   // Сonstructors
 
-  Vector();
+  Vector() : size_(0), real_size_(0),
+             alloc_(allocator_type()), data_(nullptr) {};
 
-  Vector(size_type a_size);
+  Vector(size_type a_size) : real_size_(0),
+                             alloc_(allocator_type()), data_(nullptr) { resize(a_size); };
 
   Vector(size_type a_size, const_reference a_value,
-         const allocator_type &alloc = allocator_type());
+         const allocator_type &alloc = allocator_type()) :
+      real_size_(0), alloc_(alloc), data_(nullptr) {
+    resize(a_size);
+    for (size_type i = 0; i < size_; i++)
+      data_[i] = a_value;
+  };
 
   Vector(std::initializer_list<value_type> il,
-         const allocator_type &alloc = allocator_type());
+         const allocator_type &alloc = allocator_type())
+      : alloc_(alloc), data_(nullptr), real_size_(0) {
+    resize(il.size());
+    std::copy(il.begin(), il.end(), begin());
+  }
 
-  Vector(const Vector &other, const allocator_type &alloc);
+  Vector(const Vector &other, const allocator_type &alloc = allocator_type())
+  : alloc_(alloc) {
+    resize(other.size());
+    std::copy(other.begin(), other.end(), begin());
+  }
 
   template<class InputIterator>
   Vector(InputIterator a_first, InputIterator a_last,
-         const allocator_type &alloc = allocator_type());
+         const allocator_type &alloc = allocator_type())
+      : alloc_(alloc), real_size_(0), data_(nullptr) {
+    resize(a_last - a_first);
+    std::copy(a_first, a_last, begin());
+  }
 
-  Vector &operator=(const Vector &other);
+  Vector &operator=(const Vector &other) {
+    resize(other.size());
+    std::copy(other.begin(), other.end(), begin());
+    return *this;
+  }
 
-  ~Vector();
+  ~Vector() {
+    for (size_type i = 0; i < real_size_; i++)
+      data_[i].~T();
+    alloc_.deallocate(data_, real_size_);
+  }
 
   // Iterators
 
-  iterator begin(){
+  iterator begin() {
     return iterator(data_);
   }
 
-  const_iterator begin() const;
+  //const_iterator begin() const;
 
-  iterator end(){
-    return iterator(data_ + size_ - 1);
+  iterator end() {
+    return iterator(data_ + size_);
   }
 
-  const_iterator end() const;
+ // const_iterator end() const;
 
-  reverse_iterator rbegin(){
+  reverse_iterator rbegin() {
     return reverse_iterator(end());
   }
 
-  const_reverse_iterator rbegin() const;
+ // const_reverse_iterator rbegin() const;
 
-  reverse_iterator rend(){
+  reverse_iterator rend() {
     return reverse_iterator(begin());
   }
 
-  const_reverse_iterator rend() const;
+ // const_reverse_iterator rend() const;
 
   // Capacity
 
-  size_type size() const{
+  size_type size() const {
     return size_;
   }
 
-  size_type capacity() const{
+  size_type capacity() const {
     return real_size_;
   }
 
-  bool empty() const{
+  bool empty() const {
     return size_ == 0;
   }
 
-  void reserve(size_type a_size){
-    if (a_size > real_size_){
+  void reserve(size_type a_size) {
+    if (a_size > real_size_) {
       size_type reserve_size = a_size * 2;
       pointer new_data = alloc_.allocate(reserve_size);
       if (data_ != nullptr) {
@@ -208,7 +234,7 @@ class Vector {
     }
   }
 
-  void resize(size_type a_size){
+  void resize(size_type a_size) {
     if (real_size_ < a_size)
       reserve(a_size);
     size_ = a_size;
@@ -216,67 +242,80 @@ class Vector {
 
   // Element access
 
-  reference front(){
+  reference front() {
     return data_[0];
   }
 
-  const_reference front() const;
+  //const_reference front() const;
 
-  reference back(){
+  reference back() {
     return data_[size_ - 1];
   }
 
-  const_reference back() const;
+  //const_reference back() const;
 
-  reference at(size_type a_index){
-    if (a_index < size() - 1)
+  reference at(size_type a_index) {
       return data_[a_index];
-    return nullptr;
   }
 
-  const_reference at(size_type a_index) const;
+  //const_reference at(size_type a_index) const;
 
-  reference operator[](size_type a_index){
+  reference operator[](size_type a_index) {
     return at(a_index);
   }
 
-  const_reference operator[](size_type a_index) const;
+ // const_reference operator[](size_type a_index) const;
 
   // Modifiers
 
-  iterator insert(iterator a_position, const T &a_value){
-
+  iterator insert(iterator a_position, const T &a_value) {
+    resize(size_ + 1);
+    std::copy_backward(a_position, end() - 1, end());
+    *a_position = std::move(a_value);
+    return a_position;
   }
 
   template<class... Args>
-  iterator emplace(iterator a_position, Args &&... args){
-
+  iterator emplace(iterator a_position, Args &&... args) {
+    insert(a_position, T(args...));
   }
 
   template<class... Args>
-  iterator emplace_back(Args &&... args){
+  iterator emplace_back(Args &&... args) {
     resize(size_ + 1);
-    data_[size_ - 1] = T(std::forward(args)...);
+    back() = T({std::forward<Args>(args)...});
   }
 
-  void push_back(const T &a_value){
+  void push_back(const T &a_value) {
     resize(size_ + 1);
-    data_[size_ - 1] = std::forward(a_value);
+    back() = std::move(a_value);
   }
 
   // [first, last}
-  iterator erase(iterator a_first, iterator a_last);
+  iterator erase(iterator a_first, iterator a_last) {
+    for (auto it = a_first; it < a_last; it++)
+      it->~T();
+    std::copy(a_last, end(), a_first);
+    resize(size_ - a_last + a_first);
+    return a_last;
+  }
 
-  iterator erase(iterator a_position);
+  iterator erase(iterator a_position) {
+    a_position->~T();
+    std::copy(a_position + 1, end(), a_position);
+    resize(size_ - 1);
+    return a_position;
+  }
 
-  void clear(){
-    alloc_.deallocate(data_, real_size_);
+  void clear() {
+    for (size_type i = 0; i < size_; i++)
+      data_[i].~T();
     size_ = 0;
     real_size_ = 0;
   }
 
-  void pop_back(){
-    data_[size_ - 1] = nullptr;
+  void pop_back() {
+    back().~T();
     resize(size_ - 1);
   }
 
