@@ -420,4 +420,18 @@ TEST_CASE("NO_DEFAULT_CONSTRUCTOR") {
     vec.resize(1000, A(30));
     vec.erase(Iterator<A>(&vec[0]));
     REQUIRE(vec.size() == 999);
+
+    Vector<A> vec1(vec);
+}
+
+TEST_CASE("NO_MOVE_CONSTRUCTOR"){
+    class A {
+    public:
+        A(A&& value) = delete;
+        A(const A& value) : value_(value.value_){}
+        explicit A(int value) : value_(value) {}
+        int value_;
+    };
+
+    Vector<A> vec(5);
 }

@@ -338,6 +338,9 @@ public:
             if (data_ != nullptr) {
                 for (size_type i = 0; i < capacity_; i++)
                     new_data[i] = std::move(data_[i]);
+//                for (size_type i = 0; i < capacity_; i++)
+//                    std::swap(data[i]. new_data[i]);
+                   // std::copy(iterator(&data_[0]), iterator(&data_[capacity_ - 1]), new_data);
                 alloc_.deallocate(data_, capacity_);
             }
             capacity_ = reserve_size;
