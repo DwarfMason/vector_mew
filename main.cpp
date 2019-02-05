@@ -424,14 +424,25 @@ TEST_CASE("NO_DEFAULT_CONSTRUCTOR") {
     Vector<A> vec1(vec);
 }
 
-TEST_CASE("NO_MOVE_CONSTRUCTOR"){
+TEST_CASE("COPY_CONSTRUCTOR"){
     class A {
     public:
-        A(A&& value) = delete;
-        A(const A& value) : value_(value.value_){}
+        A(const A& value) : value_(16){}
         explicit A(int value) : value_(value) {}
         int value_;
     };
 
-    Vector<A> vec(5);
+    Vector<A> vec = {A(12), A(15)};
+    REQUIRE(vec.front().value_ == A(12).value_);
+    vec.emplace_back(100);
+    REQUIRE(vec.back().value_ == A(100).value_);
+    vec[1] = A(30);
+    REQUIRE(vec[1].value_ == A(30).value_);
+    vec.insert(Iterator<A>(&vec[0]), A(16));
+    REQUIRE(vec.front().value_ == A(16).value_);
+    vec.resize(1000, A(30));
+    vec.erase(Iterator<A>(&vec[0]));
+    REQUIRE(vec.size() == 999);
+
+    Vector<A> vec1(vec);
 }
