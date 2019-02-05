@@ -7,10 +7,8 @@
 #include <limits>
 #include <memory>
 
-namespace iterator {
-
 template<typename T>
-class Iterator : std::iterator<std::random_access_iterator_tag, T> {
+class Iterator : public std::iterator<std::random_access_iterator_tag, T> {
  public:
   typedef typename std::iterator_traits<Iterator<T>> traits;
   typedef typename traits::difference_type difference_type;
@@ -65,11 +63,13 @@ class Iterator : std::iterator<std::random_access_iterator_tag, T> {
   }
 
   Iterator operator+(difference_type value) const {
-    return *this + value;
+    Iterator tmp = *this;
+    return tmp += value;
   }
 
   Iterator operator-(difference_type value) const {
-    return std::forward(*this - value);
+    Iterator tmp = *this;
+    return tmp -= value;
   }
 
   reference operator*() const {
@@ -112,7 +112,109 @@ class Iterator : std::iterator<std::random_access_iterator_tag, T> {
   pointer ptr_;
 };
 
-}
+template<typename T>
+class ConstIterator : public std::iterator<std::random_access_iterator_tag, T> {
+ public:
+  typedef typename std::iterator_traits<Iterator<T>> traits;
+  typedef typename traits::difference_type difference_type;
+  typedef typename traits::value_type value_type;
+  typedef typename traits::pointer pointer;
+  typedef typename traits::reference reference;
+  typedef typename traits::iterator_category iterator_category;
+
+  explicit ConstIterator(T *ptr = nullptr) : ptr_(ptr) {}
+
+  ConstIterator(const ConstIterator &other) : ptr_(other.ptr_) {}
+
+  ConstIterator &operator=(const ConstIterator &value) {
+    ptr_ = value.ptr_;
+    return *this;
+  }
+
+  ConstIterator &operator++() {
+    ++ptr_;
+    return *this;
+  }
+
+  ConstIterator &operator--() {
+    --ptr_;
+    return *this;
+  }
+
+  const ConstIterator operator++(int) {
+    pointer ptr = ptr_;
+    ptr_++;
+    return ConstIterator(ptr);
+  }
+
+  const ConstIterator operator--(int) {
+    pointer ptr = ptr_;
+    ptr_--;
+    return ConstIterator(ptr);
+  }
+
+  ConstIterator &operator+=(difference_type value) {
+    ptr_ += value;
+    return *this;
+  }
+
+  ConstIterator &operator-=(difference_type value) {
+    ptr_ -= value;
+    return *this;
+  }
+
+  difference_type operator-(const ConstIterator &value) const {
+    return ptr_ - value.ptr_;
+  }
+
+  ConstIterator operator+(difference_type value) const {
+    ConstIterator tmp = *this;
+    return tmp += value;
+  }
+
+  ConstIterator operator-(difference_type value) const {
+    ConstIterator tmp = *this;
+    return tmp -= value;
+  }
+
+  reference operator*() const {
+    return *ptr_;
+  }
+
+  pointer operator->() const {
+    return ptr_;
+  }
+
+  reference operator[](difference_type value) const {
+    return *(*this + value);
+  }
+
+  bool operator==(const ConstIterator &value) const {
+    return ptr_ == value.ptr_;
+  }
+
+  bool operator!=(const ConstIterator &value) const {
+    return ptr_ != value.ptr_;
+  }
+
+  bool operator>(const ConstIterator &value) const {
+    return ptr_ > value.ptr_;
+  }
+
+  bool operator<(const ConstIterator &value) const {
+    return ptr_ < value.ptr_;
+  }
+
+  bool operator>=(const ConstIterator &value) const {
+    return ptr_ >= value.ptr_;
+  }
+
+  bool operator<=(const ConstIterator &value) const {
+    return ptr_ <= value.ptr_;
+  }
+ private:
+  T *ptr_;
+};
 
 template<class T, class A = std::allocator<T>>
 class Vector {
@@ -125,23 +227,23 @@ class Vector {
   typedef typename A::difference_type difference_type;
   typedef typename A::pointer pointer;
   typedef typename A::const_pointer const_pointer;
-  typedef typename iterator::Iterator<T> iterator;
- // typedef typename ConstIterator<T> const_iterator;
+  typedef class Iterator<T> iterator;
+  typedef class ConstIterator<T> const_iterator;
   typedef std::reverse_iterator<iterator> reverse_iterator;
- // typedef std::reverse_iterator<const_iterator> const_reverse_iterator;
+  typedef std::reverse_iterator<const_iterator> const_reverse_iterator;
 
 
   // Сonstructors
 
-  Vector() : size_(0), real_size_(0),
+  Vector() : size_(0), capacity_(0),
              alloc_(allocator_type()), data_(nullptr) {};
 
-  Vector(size_type a_size) : real_size_(0),
+  explicit Vector(size_type a_size) : capacity_(0),
                              alloc_(allocator_type()), data_(nullptr) { resize(a_size); };
 
   Vector(size_type a_size, const_reference a_value,
          const allocator_type &alloc = allocator_type()) :
-      real_size_(0), alloc_(alloc), data_(nullptr) {
+      capacity_(0), alloc_(alloc), data_(nullptr) {
     resize(a_size);
     for (size_type i = 0; i < size_; i++)
       data_[i] = a_value;
@@ -149,13 +251,13 @@ class Vector {
 
   Vector(std::initializer_list<value_type> il,
          const allocator_type &alloc = allocator_type())
-      : alloc_(alloc), data_(nullptr), real_size_(0) {
+      : alloc_(alloc), data_(nullptr), capacity_(0) {
     resize(il.size());
     std::copy(il.begin(), il.end(), begin());
   }
 
   Vector(const Vector &other, const allocator_type &alloc = allocator_type())
-  : alloc_(alloc) {
+      : capacity_(0), alloc_(alloc), data_(nullptr) {
     resize(other.size());
     std::copy(other.begin(), other.end(), begin());
   }
@@ -163,7 +265,7 @@ class Vector {
   template<class InputIterator>
   Vector(InputIterator a_first, InputIterator a_last,
          const allocator_type &alloc = allocator_type())
-      : alloc_(alloc), real_size_(0), data_(nullptr) {
+      : alloc_(alloc), capacity_(0), data_(nullptr) {
     resize(a_last - a_first);
     std::copy(a_first, a_last, begin());
   }
@@ -175,9 +277,9 @@ class Vector {
   }
 
   ~Vector() {
-    for (size_type i = 0; i < real_size_; i++)
+    for (size_type i = 0; i < capacity_; i++)
       data_[i].~T();
-    alloc_.deallocate(data_, real_size_);
+    alloc_.deallocate(data_, capacity_);
   }
 
   // Iterators
@@ -186,25 +288,33 @@ class Vector {
     return iterator(data_);
   }
 
-  //const_iterator begin() const;
+  const_iterator begin() const {
+    return const_iterator(data_);
+  }
 
   iterator end() {
     return iterator(data_ + size_);
   }
 
- // const_iterator end() const;
+  const_iterator end() const {
+    return ConstIterator(data_ + size_);
+  }
 
   reverse_iterator rbegin() {
     return reverse_iterator(end());
   }
 
- // const_reverse_iterator rbegin() const;
+  const_reverse_iterator rbegin() const {
+    return const_reverse_iterator(end());
+  }
 
   reverse_iterator rend() {
     return reverse_iterator(begin());
   }
 
- // const_reverse_iterator rend() const;
+  const_reverse_iterator rend() const {
+    return const_reverse_iterator(begin());
+  }
 
   // Capacity
 
@@ -213,7 +323,7 @@ class Vector {
   }
 
   size_type capacity() const {
-    return real_size_;
+    return capacity_;
   }
 
   bool empty() const {
@@ -221,23 +331,39 @@ class Vector {
   }
 
   void reserve(size_type a_size) {
-    if (a_size > real_size_) {
+    if (a_size > capacity_) {
       size_type reserve_size = a_size * 2;
       pointer new_data = alloc_.allocate(reserve_size);
       if (data_ != nullptr) {
-        for (size_type i = 0; i < real_size_; i++)
+        for (size_type i = 0; i < capacity_; i++)
           new_data[i] = std::move(data_[i]);
-        alloc_.deallocate(data_, real_size_);
+        alloc_.deallocate(data_, capacity_);
       }
-      real_size_ = reserve_size;
+      capacity_ = reserve_size;
       data_ = new_data;
     }
   }
 
   void resize(size_type a_size) {
-    if (real_size_ < a_size)
+    if (capacity_ < a_size)
       reserve(a_size);
     size_ = a_size;
+  }
+
+   void resize(size_type a_size, value_type value){
+     if (capacity_ < a_size)
+       reserve(a_size);
+     size_ = a_size;
+     for (size_type i = size_ - a_size; i < size(); i++)
+       data_[i] = value;
+  }
+
+   void assign(size_type a_size, value_type value){
+     if (capacity_ < a_size)
+       reserve(a_size);
+     size_ = a_size;
+     for (size_type i = 0; i < size(); i++)
+       data_[i] = value;
   }
 
   // Element access
@@ -246,38 +372,63 @@ class Vector {
     return data_[0];
   }
 
-  //const_reference front() const;
+  const_reference front() const {
+    return data_[0];
+  }
 
   reference back() {
     return data_[size_ - 1];
   }
 
-  //const_reference back() const;
+  const_reference back() const {
+    return data_[size_ - 1];
+  }
 
   reference at(size_type a_index) {
+    try{
+      if (a_index >= size() || a_index < 0)
+        throw 1;
       return data_[a_index];
+    }
+    catch (int thr){
+      std::cout << "Out of range!";
+    }
   }
 
-  //const_reference at(size_type a_index) const;
+  const_reference at(size_type a_index) const{
+    try{
+      if (a_index >= size() || a_index < 0)
+        throw 1;
+      return data_[a_index];
+    }
+    catch (int thr){
+      std::cout << "Out of range!";
+    }
+  }
 
   reference operator[](size_type a_index) {
-    return at(a_index);
+    return data_[a_index];
   }
 
- // const_reference operator[](size_type a_index) const;
+   const_reference operator[](size_type a_index) const{
+     return data_[a_index];
+  }
 
   // Modifiers
 
   iterator insert(iterator a_position, const T &a_value) {
     resize(size_ + 1);
-    std::copy_backward(a_position, end() - 1, end());
+    std::move_backward(a_position, end() - 1, end());
     *a_position = std::move(a_value);
     return a_position;
   }
 
   template<class... Args>
   iterator emplace(iterator a_position, Args &&... args) {
-    insert(a_position, T(args...));
+    resize(size_ + 1);
+    std::move_backward(a_position, end() - 1, end());
+    *a_position = T({std::forward<Args>(args)...});
+    return a_position;
   }
 
   template<class... Args>
@@ -288,21 +439,21 @@ class Vector {
 
   void push_back(const T &a_value) {
     resize(size_ + 1);
-    back() = std::move(a_value);
+    back() = std::copy(a_value);
   }
 
   // [first, last}
   iterator erase(iterator a_first, iterator a_last) {
     for (auto it = a_first; it < a_last; it++)
       it->~T();
-    std::copy(a_last, end(), a_first);
+    std::move(a_last, end(), a_first);
     resize(size_ - a_last + a_first);
     return a_last;
   }
 
   iterator erase(iterator a_position) {
     a_position->~T();
-    std::copy(a_position + 1, end(), a_position);
+    std::move(a_position + 1, end(), a_position);
     resize(size_ - 1);
     return a_position;
   }
@@ -311,7 +462,7 @@ class Vector {
     for (size_type i = 0; i < size_; i++)
       data_[i].~T();
     size_ = 0;
-    real_size_ = 0;
+    capacity_ = 0;
   }
 
   void pop_back() {
@@ -321,7 +472,7 @@ class Vector {
 
  private:
   size_type size_;
-  size_type real_size_;
+  size_type capacity_;
   allocator_type alloc_;
   pointer data_;
 };
