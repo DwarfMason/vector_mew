@@ -277,9 +277,9 @@ TEST_CASE("VECTOR_CAPACITY") {
     for (int i = 1; i < vec.size(); i++)
         REQUIRE(vec[i] == 12);
 
-    vec.assign(80, 60);
+    vec.assign(120, 60);
     REQUIRE(vec.size() == 80);
-    REQUIRE(vec.capacity() == 80);
+    REQUIRE(vec.capacity() == 240);
     for (auto i : vec)
         REQUIRE(i == 60);
 }
